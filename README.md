@@ -43,4 +43,5 @@ npm start
 - Redirect increments `clicks` and updates `last_clicked`. Deletion removes the code and then redirect returns 404.
 - See `server.js` for implementation details.
 
-Good luck! Record a short video walkthrough showing Dashboard, creating a link, redirect working, stats page, deleting a link, and health endpoint.
+
+
