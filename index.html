@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TinyLink - Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-white shadow">
+    <div class="max-w-4xl mx-auto py-4 px-6">
+      <h1 class="text-2xl font-semibold">TinyLink</h1>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-6 py-8">
+    <section class="mb-6">
+      <h2 class="text-lg font-medium mb-2">Create Short Link</h2>
+      <form id="createForm" class="bg-white p-4 rounded shadow">
+        <div class="mb-3">
+          <label class="block text-sm font-medium">Target URL</label>
+          <input id="target_url" class="w-full border rounded px-3 py-2" placeholder="https://example.com/long/path">
+        </div>
+        <div class="mb-3">
+          <label class="block text-sm font-medium">Custom Code (optional, 6-8 alnum)</label>
+          <input id="code" class="w-full border rounded px-3 py-2" placeholder="e.g. docs123">
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="createBtn" type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Create</button>
+          <div id="createMsg" class="text-sm"></div>
+        </div>
+      </form>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-medium mb-2">Links</h2>
+      <div class="bg-white p-4 rounded shadow">
+        <input id="search" placeholder="Search by code or URL" class="w-full border rounded px-3 py-2 mb-3">
+        <div id="tableWrap" class="overflow-auto">
+          <table class="min-w-full text-sm">
+            <thead>
+              <tr class="text-left">
+                <th class="px-2 py-2">Code</th>
+                <th class="px-2 py-2">Target URL</th>
+                <th class="px-2 py-2">Clicks</th>
+                <th class="px-2 py-2">Last Clicked</th>
+                <th class="px-2 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="linksTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="max-w-4xl mx-auto px-6 py-6 text-sm text-gray-500">
+    <div>Health: <span id="health">checking...</span></div>
+  </footer>
+
+<script>
+const BASE = '';
+
+async function fetchLinks() {
+  const res = await fetch('/api/links');
+  return res.json();
+}
+
+function truncate(text, n=60) {
+  if (!text) return '';
+  return text.length > n ? text.slice(0,n-1) + '…' : text;
+}
+
+function renderLinks(links) {
+  const tbody = document.getElementById('linksTbody');
+  tbody.innerHTML = '';
+  links.forEach(l => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="px-2 py-2 align-top"><a href="/code/${l.code}" class="text-blue-600">${l.code}</a></td>
+      <td class="px-2 py-2 align-top"><a title="${l.target_url}" href="${l.target_url}" target="_blank">${truncate(l.target_url,80)}</a></td>
+      <td class="px-2 py-2 align-top">${l.clicks}</td>
+      <td class="px-2 py-2 align-top">${l.last_clicked || '-'}</td>
+      <td class="px-2 py-2 align-top">
+        <button data-code="${l.code}" class="deleteBtn bg-red-500 text-white px-2 py-1 rounded text-sm">Delete</button>
+        <button data-copy="${l.code}" class="copyBtn ml-2 bg-gray-200 px-2 py-1 rounded text-sm">Copy</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.querySelectorAll('.deleteBtn').forEach(b => {
+    b.addEventListener('click', async (e) => {
+      const code = e.target.dataset.code;
+      if (!confirm('Delete ' + code + '?')) return;
+      const res = await fetch('/api/links/' + code, { method: 'DELETE' });
+      if (res.ok) {
+        loadAndRender();
+      } else {
+        alert('Delete failed');
+      }
+    });
+  });
+  document.querySelectorAll('.copyBtn').forEach(b => {
+    b.addEventListener('click', (e) => {
+      const code = e.target.dataset.copy;
+      const url = window.location.origin + '/' + code;
+      navigator.clipboard.writeText(url);
+      alert('Copied: ' + url);
+    });
+  });
+}
+
+async function loadAndRender() {
+  const all = await fetchLinks();
+  const q = document.getElementById('search').value.toLowerCase().trim();
+  const filtered = all.filter(l => {
+    return l.code.toLowerCase().includes(q) || l.target_url.toLowerCase().includes(q);
+  });
+  renderLinks(filtered);
+}
+
+document.getElementById('search').addEventListener('input', loadAndRender);
+
+document.getElementById('createForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const target_url = document.getElementById('target_url').value.trim();
+  const code = document.getElementById('code').value.trim();
+  const msg = document.getElementById('createMsg');
+  msg.textContent = 'Creating...';
+  document.getElementById('createBtn').disabled = true;
+  try {
+    const res = await fetch('/api/links', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ target_url, code: code || undefined })
+    });
+    if (res.status === 201) {
+      msg.textContent = 'Created!';
+      document.getElementById('target_url').value = '';
+      document.getElementById('code').value = '';
+      loadAndRender();
+    } else {
+      const body = await res.json();
+      msg.textContent = body.error || 'Error';
+    }
+  } catch (err) {
+    msg.textContent = 'Error';
+  } finally {
+    document.getElementById('createBtn').disabled = false;
+    setTimeout(()=>{ msg.textContent = ''; }, 3000);
+  }
+});
+
+async function checkHealth() {
+  try {
+    const res = await fetch('/healthz');
+    if (res.ok) {
+      const j = await res.json();
+      document.getElementById('health').textContent = 'OK (' + (j.version || '') + ')';
+    } else {
+      document.getElementById('health').textContent = 'DOWN';
+    }
+  } catch (err) {
+    document.getElementById('health').textContent = 'ERROR';
+  }
+}
+
+window.addEventListener('load', () => {
+  loadAndRender();
+  checkHealth();
+});
+</script>
+
+</body>
+</html>

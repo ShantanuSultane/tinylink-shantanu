@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TinyLink - Stats</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <header class="bg-white shadow">
+    <div class="max-w-4xl mx-auto py-4 px-6">
+      <h1 class="text-2xl font-semibold">TinyLink - Stats</h1>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-6 py-8">
+    <div class="bg-white p-4 rounded shadow">
+      <div id="content">Loading...</div>
+    </div>
+    <p class="mt-4"><a href="/" class="text-blue-600">Back to Dashboard</a></p>
+  </main>
+
+<script>
+async function load() {
+  const parts = window.location.pathname.split('/');
+  const code = parts[2] || parts[1];
+  if (!code) {
+    document.getElementById('content').textContent = 'No code provided.';
+    return;
+  }
+  const res = await fetch('/api/links/' + code);
+  if (res.status === 200) {
+    const l = await res.json();
+    document.getElementById('content').innerHTML = `
+      <h2 class="text-lg font-medium mb-2">Code: <span class="text-blue-600">${l.code}</span></h2>
+      <p><strong>Target:</strong> <a href="${l.target_url}" target="_blank" class="text-blue-600">${l.target_url}</a></p>
+      <p><strong>Clicks:</strong> ${l.clicks}</p>
+      <p><strong>Last clicked:</strong> ${l.last_clicked || '-'}</p>
+      <p class="mt-2"><a href="/${l.code}" target="_blank" class="text-sm text-gray-700">Open redirect</a></p>
+    `;
+  } else {
+    document.getElementById('content').textContent = 'Not found.';
+  }
+}
+
+window.addEventListener('load', load);
+</script>
+</body>
+</html>
